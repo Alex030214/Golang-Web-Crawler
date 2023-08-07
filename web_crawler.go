@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/url"
 	"github.com/gocolly/colly"
+	"net/http"
+	"time"
 )
 // CustomError is a struct to hold error messages and additional information.
 type CustomError struct {
@@ -19,6 +21,21 @@ type CustomError struct {
 // Implement the error interface for CustomError.
 func (e CustomError) Error() string {
 	return fmt.Sprintf("Error: %s (Code: %d)", e.Message, e.Code)
+}
+
+// return the duration it took to load the page
+func getPageLoadingSpeed(url string) time.Duration {
+	startTime := time.Now()
+
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Printf("Error fetching URL %s: %v\n", url, err)
+		return 0
+	}
+	defer resp.Body.Close()
+
+	loadingTime := time.Since(startTime)
+	return loadingTime
 }
 
 //Check URL structure and SEO-friendliness
@@ -105,6 +122,9 @@ func main() {
 	// Print the list of URLs
 	fmt.Println("List of URLs:", inputURLs)
 
+	// Map to store the start time of each request by URL
+	requestStartTimes := make(map[string]time.Time)
+	
 	// Create a new Colly collector (crawler) with the specified settings.
 	c := colly.NewCollector(
 		colly.MaxDepth(0),                    // Set the maximum depth of the crawling process (0 means no limit).
@@ -118,6 +138,15 @@ func main() {
 		r.Headers.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
 	})
 
+/*	// OnRequest is triggered before a request is made
+	c.OnRequest(func(r *colly.Request) {
+		// Set a custom User-Agent string in the request headers
+		r.Headers.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
+		// Store the start time for this request URL
+		requestStartTimes[r.URL.String()] = time.Now()
+	}) 
+*/
+
 	// OnError is triggered if an error occurs while processing a request.
 	c.OnError(func(r *colly.Response, err error) {
 		log.Println("Something went wrong, https:", err)
@@ -127,6 +156,15 @@ func main() {
 	c.OnResponse(func(r *colly.Response) {
 		fmt.Printf("Visited: %s (Status: %d, Content-Type: %s)\n", r.Request.URL, r.StatusCode, r.Headers.Get("Content-Type"))
 	})
+
+/*	// OnResponse is triggered when a response is received from the server
+	c.OnResponse(func(r *colly.Response) {
+		// Calculate the loading time for this URL by subtracting the start time from the current time
+		loadingTime := time.Since(requestStartTimes[r.Request.URL.String()])
+		// Print the URL, status code, content type, and loading time
+		fmt.Printf("Visited: %s (Status: %d, Content-Type: %s, Loading Time: %v)\n", r.Request.URL, r.StatusCode, r.Headers.Get("Content-Type"), loadingTime)
+	})
+*/
 
 	// OnHTML is triggered when the program accesses an HTML resource.
 	// It looks for the page title and prints it.
