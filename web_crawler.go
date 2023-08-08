@@ -15,6 +15,8 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/gocolly/colly/v2"
+	"net/http"
+	"time"
 )
 
 // CustomError is a struct to hold error messages and additional information.
@@ -110,12 +112,31 @@ func main() {
 			// Create a wait group to wait for all goroutines to finish.
 			var wg sync.WaitGroup
 
+			// Map to store the start time of each request by URL
+			requestStartTimes := make(map[string]time.Time)
+			
 			// Create a new Colly collector with the specified settings.
 			c := colly.NewCollector(
 				colly.MaxDepth(0),
 				colly.Async(true),
 				colly.IgnoreRobotsTxt(),
 			)
+
+			// OnRequest is triggered before a request is made
+			c.OnRequest(func(r *colly.Request) {
+				// Set a custom User-Agent string in the request headers
+				r.Headers.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
+				// Store the start time for this request URL
+				requestStartTimes[r.URL.String()] = time.Now()
+			})
+
+			// OnResponse is triggered when a response is received from the server
+			c.OnResponse(func(r *colly.Response) {
+				// Calculate the loading time for this URL by subtracting the start time from the current time
+				loadingTime := time.Since(requestStartTimes[r.Request.URL.String()])
+				// Print the URL, status code, content type, and loading time
+				fmt.Printf("Visited: %s (Status: %d, Content-Type: %s, Loading Time: %v)\n", r.Request.URL, r.StatusCode, r.Headers.Get("Content-Type"), loadingTime)
+			})
 
 			// OnScraped is triggered after the program finishes scraping a resource.
 			c.OnScraped(func(r *colly.Response) {
