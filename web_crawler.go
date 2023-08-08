@@ -15,6 +15,9 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/gocolly/colly/v2"
+
+	"net/http"
+	"time"
 )
 
 // CustomError is a struct to hold error messages and additional information.
@@ -26,6 +29,23 @@ type CustomError struct {
 // Implement the error interface for CustomError.
 func (e CustomError) Error() string {
 	return fmt.Sprintf("Error: %s (Code: %d)", e.Message, e.Code)
+}
+
+// fetchURL measures the time taken to fetch the content of a URL.
+func fetchURL(urlStr string) (time.Duration, error) {
+	start := time.Now()
+
+	resp, err := http.Get(urlStr)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("got HTTP status code %d", resp.StatusCode)
+	}
+
+	return time.Since(start), nil
 }
 
 // Check URL structure and SEO-friendliness
@@ -182,9 +202,21 @@ func main() {
 				normalizedURLsMutex.Unlock()
 
 				go func(url string) {
+					// Measure loading speed
+					duration, err := fetchURL(url)
+					if err != nil {
+						crawlingLogs.SetText(crawlingLogs.Text + fmt.Sprintf("Failed to fetch %s: %s\n", url, err))
+						<-concurrentRequests
+						wg.Done()
+						return
+					}
+					crawlingLogs.SetText(crawlingLogs.Text + fmt.Sprintf("Loaded %s in %v\n", url, duration))
+
+					// Now let Colly visit and scrape the site
 					c.Visit(url)
 					<-concurrentRequests
 				}(inputURL)
+
 			}
 
 			for _, similarURLs := range duplicateLogs {
